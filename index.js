@@ -5,10 +5,14 @@ const app = express();
 app.use(express.json());
 
 // ── env vars (set these in Render dashboard) ──────────────────────────────────
-const FIREBASE_AUTH   = process.env.FIREBASE_AUTH;   // your ?auth= token
-const RTDB_HOST       = process.env.RTDB_HOST;       // locus-1bcc8-default-rtdb.asia-southeast1.firebasedatabase.app
-const FIRESTORE_PROJECT = process.env.FIRESTORE_PROJECT; // locus-1bcc8
-const FIRESTORE_REGION  = process.env.FIRESTORE_REGION;  // asia-southeast1
+const FIREBASE_AUTH     = process.env.FIREBASE_AUTH;
+const RTDB_HOST         = process.env.RTDB_HOST;
+const FIRESTORE_PROJECT = process.env.FIRESTORE_PROJECT;
+const FIRESTORE_REGION  = process.env.FIRESTORE_REGION;
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Hardcoded UID (change this per device) ────────────────────────────────────
+const USER_UID = "VrmRSByRHJbGSMiLcltAMvLDnMx2";
 // ─────────────────────────────────────────────────────────────────────────────
 
 // helper: make an HTTPS request and return body as string
@@ -25,13 +29,12 @@ function httpsRequest(options, body) {
   });
 }
 
-// ── GET /geo?uid=VrmRSByRHJbGSMiLcltAMvLDnMx2&type=school ───────────────────
-// Fetches geofence from Realtime DB
+// ── GET /geo?type=school ──────────────────────────────────────────────────────
 app.get("/geo", async (req, res) => {
-  const { uid, type } = req.query; // type = "school" or "home"
-  if (!uid || !type) return res.status(400).send("missing uid or type");
+  const { type } = req.query;
+  if (!type) return res.status(400).send("missing type");
 
-  const path = `/geofences/${uid}/${type}.json?auth=${FIREBASE_AUTH}`;
+  const path = `/geofences/${USER_UID}/${type}.json?auth=${FIREBASE_AUTH}`;
   try {
     const result = await httpsRequest({
       hostname: RTDB_HOST,
@@ -45,11 +48,9 @@ app.get("/geo", async (req, res) => {
 });
 
 // ── POST /track ───────────────────────────────────────────────────────────────
-// Body: { uid, lat, lng, battery, sos, signalStrength, reliability, timestamp }
-// Forwards a PATCH to Realtime DB tracking node
 app.post("/track", async (req, res) => {
-  const { uid, lat, lng, battery, sos, signalStrength, reliability, timestamp } = req.body;
-  if (!uid || lat === undefined || lng === undefined)
+  const { lat, lng, battery, sos, signalStrength, reliability, timestamp } = req.body;
+  if (lat === undefined || lng === undefined)
     return res.status(400).send("missing fields");
 
   const json = JSON.stringify({
@@ -63,7 +64,7 @@ app.post("/track", async (req, res) => {
     last_updated: String(timestamp || Date.now()),
   });
 
-  const path = `/tracking/${uid}.json?auth=${FIREBASE_AUTH}`;
+  const path = `/tracking/${USER_UID}.json?auth=${FIREBASE_AUTH}`;
   try {
     const result = await httpsRequest(
       {
@@ -83,16 +84,12 @@ app.post("/track", async (req, res) => {
   }
 });
 
-// ── GET /contact?uid=VrmRSByRHJbGSMiLcltAMvLDnMx2 ───────────────────────────
-// Fetches contact_number from Firestore
+// ── GET /contact ──────────────────────────────────────────────────────────────
 app.get("/contact", async (req, res) => {
-  const { uid } = req.query;
-  if (!uid) return res.status(400).send("missing uid");
-
-  const path = `/v1/projects/${FIRESTORE_PROJECT}/databases/(default)/documents/users/${uid}`;
+  const path = `/v1/projects/${FIRESTORE_PROJECT}/databases/(default)/documents/users/${USER_UID}`;
   try {
     const result = await httpsRequest({
-      hostname: `firestore.googleapis.com`,
+      hostname: "firestore.googleapis.com",
       path,
       method: "GET",
     });
